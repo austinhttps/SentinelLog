@@ -5,8 +5,8 @@
  */
 
 // Regex for Apache/Nginx Combined & Common Access Logs
-// Group 1: IP, Group 2: Identity, Group 3: User, Group 4: Timestamp, Group 5: Method, Group 6: Path, Group 7: Version, Group 8: Status, Group 9: Bytes, Group 10: Referer, Group 11: User Agent
-const APACHE_NGINX_REGEX = /^(\S+) (\S+) (\S+) \[([\w:/]+\s[+\-]\d{4})\] "(?:([A-Z]+)\s+([^\s"]+)(?:\s+HTTP\/(\d\.\d))?|-)" (\d{3}) (\d+|-)(?: "(.*?)" "(.*?)")?/;
+// Supports unencoded queries with spaces, HTTP/1.0, HTTP/1.1, HTTP/2, HTTP/3, and optional referer/UA
+const APACHE_NGINX_REGEX = /^(\S+)\s+(\S+)\s+(\S+)\s+\[([\w:/]+\s[+\-]\d{4})\]\s+"(?:([A-Za-z]+)\s+(.+?)(?:\s+HTTP\/([0-9.]+))?|-)"\s+(\d{3})\s+(\d+|-)(?:\s+"(.*?)"\s+"(.*?)")?/;
 
 // Regex for Linux Syslog / Auth Log format
 // E.g.: Sep 30 14:20:10 server1 sshd[12345]: Failed password for invalid user admin from 198.51.100.42 port 54321 ssh2
@@ -26,7 +26,7 @@ const SSHD_INVALID_USER_PATTERN = /Invalid user\s+([^\s]+)\s+from\s+([0-9a-fA-F\
 function parseAccessLog(line) {
   try {
     const trimmed = line.trim();
-    if (!trimmed) return null;
+    if (!trimmed || trimmed.startsWith('#')) return null;
 
     const match = trimmed.match(APACHE_NGINX_REGEX);
     if (!match) return null;
@@ -49,11 +49,13 @@ function parseAccessLog(line) {
     let timestamp;
     try {
       // e.g. "30/Sep/2026:14:20:10 +0000"
-      const dateParts = rawTime.match(/^(\d{2})\/([A-Za-z]{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s+([+\-]\d{4})$/);
+      const dateParts = rawTime.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s+([+\-]\d{4})$/);
       if (dateParts) {
         const monthMap = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
-        const isoStr = `${dateParts[3]}-${monthMap[dateParts[2]] || '01'}-${dateParts[1]}T${dateParts[4]}:${dateParts[5]}:${dateParts[6]}${dateParts[7].slice(0, 3)}:${dateParts[7].slice(3)}`;
-        timestamp = new Date(isoStr).toISOString();
+        const day = dateParts[1].padStart(2, '0');
+        const isoStr = `${dateParts[3]}-${monthMap[dateParts[2]] || '01'}-${day}T${dateParts[4]}:${dateParts[5]}:${dateParts[6]}${dateParts[7].slice(0, 3)}:${dateParts[7].slice(3)}`;
+        const parsedDate = new Date(isoStr);
+        timestamp = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
       } else {
         timestamp = new Date().toISOString();
       }
@@ -189,6 +191,17 @@ function parseLogLine(line) {
       type: 'empty',
       error: 'Empty line',
       raw: line
+    };
+  }
+
+  // Handle comment lines
+  if (trimmed.startsWith('#')) {
+    return {
+      parsed: true,
+      type: 'comment',
+      timestamp: new Date().toISOString(),
+      message: trimmed,
+      raw: trimmed
     };
   }
 

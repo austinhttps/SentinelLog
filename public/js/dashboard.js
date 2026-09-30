@@ -606,27 +606,68 @@ window.triggerSimulation = async function(scenarioId = 'ssh-brute-force') {
 window.loadSampleFixture = async function(fixtureName) {
   try {
     showToast(`Loading sample ${fixtureName}...`, 'info');
+
+    // 1. Try server-side sample loader (reads actual full files with dynamic real-time timestamps)
+    try {
+      const res = await fetch(`/api/samples/load/${encodeURIComponent(fixtureName)}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Ingested ${data.totalLines} lines from ${data.filename} (${data.alertsTriggered} alerts triggered)`, 'success');
+          return;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('Server sample endpoint failed, falling back to local payload:', apiErr);
+    }
+
+    // 2. Client-side fallback with dynamic current timestamps
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[now.getMonth()];
+    const year = now.getFullYear();
+    const timeStr = now.toTimeString().split(' ')[0];
+
     let sampleContent = '';
 
-    if (fixtureName === 'auth.log') {
-      sampleContent = `Sep 30 14:10:00 sec-srv-01 sshd[1301]: Failed password for invalid user admin from 198.51.100.42 port 52001 ssh2\n` +
-        `Sep 30 14:10:01 sec-srv-01 sshd[1302]: Failed password for root from 198.51.100.42 port 52002 ssh2\n` +
-        `Sep 30 14:10:01 sec-srv-01 sshd[1303]: Failed password for invalid user ubuntu from 198.51.100.42 port 52003 ssh2\n` +
-        `Sep 30 14:10:02 sec-srv-01 sshd[1304]: Failed password for invalid user deploy from 198.51.100.42 port 52004 ssh2\n` +
-        `Sep 30 14:10:02 sec-srv-01 sshd[1305]: Failed password for invalid user postgres from 198.51.100.42 port 52005 ssh2\n` +
-        `Sep 30 14:10:03 sec-srv-01 sshd[1306]: Failed password for root from 198.51.100.42 port 52006 ssh2`;
-    } else if (fixtureName === 'access.log') {
-      sampleContent = `185.220.101.5 - - [30/Sep/2026:14:05:01 +0000] "GET /static/../../../../etc/passwd HTTP/1.1" 403 512 "-" "DirBuster"\n` +
-        `203.0.113.88 - - [30/Sep/2026:14:06:10 +0000] "GET /api/v1/users?id=1%27%20OR%20%271%27=%271 HTTP/1.1" 200 3420 "-" "Sqlmap"\n` +
-        `203.0.113.88 - - [30/Sep/2026:14:06:11 +0000] "GET /products/search?query=test%27%20UNION%20SELECT%20null,password%20FROM%20users-- HTTP/1.1" 200 4890 "-" "Sqlmap"`;
-    } else if (fixtureName === 'mixed.log') {
-      sampleContent = `Sep 30 15:01:00 gateway sshd[2310]: Failed password for invalid user admin from 198.51.100.42 port 51001 ssh2\n` +
-        `Sep 30 15:01:01 gateway sshd[2311]: Failed password for root from 198.51.100.42 port 51002 ssh2\n` +
-        `Sep 30 15:01:02 gateway sshd[2312]: Failed password for invalid user guest from 198.51.100.42 port 51003 ssh2\n` +
-        `Sep 30 15:01:02 gateway sshd[2313]: Failed password for invalid user support from 198.51.100.42 port 51004 ssh2\n` +
-        `Sep 30 15:01:03 gateway sshd[2314]: Failed password for invalid user db from 198.51.100.42 port 51005 ssh2\n` +
-        `203.0.113.88 - - [30/Sep/2026:15:02:10 +0000] "GET /search?q=1%27%20UNION%20SELECT%20user,password%20FROM%20users-- HTTP/1.1" 200 2100 "-" "Sqlmap"\n` +
-        `185.220.101.5 - - [30/Sep/2026:15:02:20 +0000] "GET /view?page=../../../../etc/passwd HTTP/1.1" 403 230 "-" "curl"`;
+    if (fixtureName.includes('auth')) {
+      sampleContent = 
+        `${month} ${day} ${timeStr} sec-srv-01 sshd[1301]: Failed password for invalid user admin from 198.51.100.42 port 52001 ssh2\n` +
+        `${month} ${day} ${timeStr} sec-srv-01 sshd[1302]: Failed password for root from 198.51.100.42 port 52002 ssh2\n` +
+        `${month} ${day} ${timeStr} sec-srv-01 sshd[1303]: Failed password for invalid user ubuntu from 198.51.100.42 port 52003 ssh2\n` +
+        `${month} ${day} ${timeStr} sec-srv-01 sshd[1304]: Failed password for invalid user deploy from 198.51.100.42 port 52004 ssh2\n` +
+        `${month} ${day} ${timeStr} sec-srv-01 sshd[1305]: Failed password for invalid user postgres from 198.51.100.42 port 52005 ssh2\n` +
+        `${month} ${day} ${timeStr} sec-srv-01 sshd[1306]: Failed password for root from 198.51.100.42 port 52006 ssh2`;
+    } else if (fixtureName.includes('access')) {
+      sampleContent = 
+        `10.0.0.15 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /index.html HTTP/1.1" 200 4520 "https://sentinel.local/" "Mozilla/5.0"\n` +
+        `185.220.101.5 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /static/../../../../etc/passwd HTTP/1.1" 403 512 "-" "DirBuster"\n` +
+        `203.0.113.88 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /api/v1/users?id=1%27%20OR%20%271%27=%271 HTTP/1.1" 200 3420 "-" "Sqlmap"\n` +
+        `203.0.113.88 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /products/search?query=test%27%20UNION%20SELECT%20null,password%20FROM%20users-- HTTP/1.1" 200 4890 "-" "Sqlmap"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /admin.php HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /wp-login.php HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /.env HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /.git/config HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /phpmyadmin/ HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /config.json HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /backup.zip HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /api/v2/secret HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /actuator/health HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /database.sql HTTP/1.1" 404 280 "-" "ffuf"\n` +
+        `194.26.29.112 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /console/ HTTP/1.1" 404 280 "-" "ffuf"`;
+    } else {
+      sampleContent = 
+        `${month} ${day} ${timeStr} gateway sshd[2310]: Failed password for invalid user admin from 198.51.100.42 port 51001 ssh2\n` +
+        `${month} ${day} ${timeStr} gateway sshd[2311]: Failed password for root from 198.51.100.42 port 51002 ssh2\n` +
+        `${month} ${day} ${timeStr} gateway sshd[2312]: Failed password for invalid user guest from 198.51.100.42 port 51003 ssh2\n` +
+        `${month} ${day} ${timeStr} gateway sshd[2313]: Failed password for invalid user support from 198.51.100.42 port 51004 ssh2\n` +
+        `${month} ${day} ${timeStr} gateway sshd[2314]: Failed password for invalid user db from 198.51.100.42 port 51005 ssh2\n` +
+        `${month} ${day} ${timeStr} gateway sshd[2315]: Failed password for root from 198.51.100.42 port 51006 ssh2\n` +
+        `203.0.113.88 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /search?q=1%27%20UNION%20SELECT%20user,password%20FROM%20users-- HTTP/1.1" 200 2100 "-" "Sqlmap"\n` +
+        `185.220.101.5 - - [${day}/${month}/${year}:${timeStr} +0000] "GET /view?page=../../../../etc/passwd HTTP/1.1" 403 230 "-" "curl"`;
     }
 
     await ingestRawText(sampleContent);

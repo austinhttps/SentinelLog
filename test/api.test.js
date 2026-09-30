@@ -73,4 +73,32 @@ test('API Endpoints - Integration Tests', async (t) => {
     assert.equal(data.success, true);
     assert.ok(Array.isArray(data.alerts));
   });
+
+  await t.test('GET /api/samples/:filename returns raw sample text', async () => {
+    const response = await fetch(`${baseUrl}/samples/access.log`);
+    const text = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.ok(text.includes('185.220.101.5'));
+  });
+
+  await t.test('POST /api/samples/load/access.log dynamically ingests access sample', async () => {
+    const response = await fetch(`${baseUrl}/samples/load/access.log`, { method: 'POST' });
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.success, true);
+    assert.ok(data.totalLines > 0);
+    assert.ok(data.alertsTriggered > 0, 'Should trigger SIEM alerts from access.log attacks');
+  });
+
+  await t.test('POST /api/samples/load/mixed_attacks.log dynamically ingests multi-vector sample', async () => {
+    const response = await fetch(`${baseUrl}/samples/load/mixed_attacks.log`, { method: 'POST' });
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.success, true);
+    assert.ok(data.totalLines > 0);
+    assert.ok(data.alertsTriggered > 0, 'Should trigger SIEM alerts from mixed_attacks.log');
+  });
 });
