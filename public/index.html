@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentinelLog - Real-Time SIEM & Log Ingestion Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            soc: {
+              bg: '#0a0e17',
+              card: '#111827',
+              border: 'rgba(255, 255, 255, 0.08)'
+            }
+          },
+          fontFamily: {
+            mono: ['"JetBrains Mono"', '"Fira Code"', 'monospace'],
+            sans: ['Inter', 'system-ui', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts & Chart.js -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  
+  <!-- Custom SOC Theme Styles -->
+  <link rel="stylesheet" href="/css/custom.css">
+</head>
+<body class="bg-soc-bg text-slate-100 min-h-screen crt-grid flex flex-col">
+
+  <!-- TOP NAVIGATION / SOC HEADER -->
+  <header class="border-b border-white/10 bg-[#0d1322]/90 backdrop-blur sticky top-0 z-40 px-6 py-3.5">
+    <div class="max-w-[1700px] mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      
+      <!-- Brand & Engine Title -->
+      <div class="flex items-center space-x-3.5">
+        <div class="h-10 w-10 rounded-lg bg-gradient-to-tr from-indigo-600 to-rose-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 border border-white/20">
+          <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+              SENTINEL<span class="text-indigo-400 font-extrabold">LOG</span>
+            </h1>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">SIEM CORE v1.0</span>
+          </div>
+          <p class="text-xs text-slate-400 font-mono">Real-Time Ingestion Pipeline & Sliding-Window Threat Correlation</p>
+        </div>
+      </div>
+
+      <!-- Live Connection Indicator & Action Controls -->
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Live Status Pill -->
+        <div class="flex items-center space-x-2 bg-slate-900/80 border border-white/10 px-3 py-1.5 rounded-lg">
+          <div id="connectionDot" class="h-2.5 w-2.5 rounded-full bg-emerald-400 pulse-emerald"></div>
+          <span id="connectionLabel" class="text-xs font-semibold text-emerald-400 tracking-wider">ONLINE / STREAMING</span>
+        </div>
+
+        <!-- Quick Sample Ingestion Dropdown/Buttons -->
+        <div class="relative inline-block text-left">
+          <button onclick="document.getElementById('sampleDropdown').classList.toggle('hidden')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-white/10 transition-colors flex items-center space-x-1.5">
+            <span>📂 Load Sample Logs</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div id="sampleDropdown" class="hidden absolute right-0 mt-2 w-52 rounded-md shadow-xl bg-slate-900 border border-white/10 z-50 py-1 font-mono text-xs">
+            <button onclick="loadSampleFixture('auth.log'); document.getElementById('sampleDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 text-slate-300 hover:bg-indigo-600/30 hover:text-white flex items-center space-x-2">
+              <span>🔑</span> <span>auth.log (SSH Brute Force)</span>
+            </button>
+            <button onclick="loadSampleFixture('access.log'); document.getElementById('sampleDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 text-slate-300 hover:bg-indigo-600/30 hover:text-white flex items-center space-x-2">
+              <span>🌐</span> <span>access.log (SQLi / Traversal)</span>
+            </button>
+            <button onclick="loadSampleFixture('mixed.log'); document.getElementById('sampleDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 text-slate-300 hover:bg-indigo-600/30 hover:text-white flex items-center space-x-2">
+              <span>⚡</span> <span>mixed_attacks.log (APT Multi)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Paste Raw Button -->
+        <button id="pasteLogsBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-white/10 transition-colors flex items-center space-x-1.5">
+          <span>📝 Paste Raw</span>
+        </button>
+
+        <!-- Simulation Selector & Trigger -->
+        <div class="relative inline-block text-left">
+          <button onclick="document.getElementById('simDropdown').classList.toggle('hidden')" class="px-4 py-1.5 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-rose-900/30 transition-all flex items-center space-x-2 border border-rose-400/30">
+            <span>⚡ Start Attack Simulation</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div id="simDropdown" class="hidden absolute right-0 mt-2 w-72 rounded-lg shadow-2xl bg-slate-900 border border-rose-500/30 z-50 p-2 font-sans text-xs">
+            <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1 mb-1 border-b border-white/5">Select Attack Scenario</div>
+            <button onclick="triggerSimulation('ssh-brute-force'); document.getElementById('simDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 rounded-md hover:bg-rose-500/20 text-slate-200 transition-colors">
+              <div class="font-bold text-rose-300">1. SSH Brute Force (RULE-001)</div>
+              <div class="text-[11px] text-slate-400">8 rapid login attempts from 198.51.100.42</div>
+            </button>
+            <button onclick="triggerSimulation('sql-injection'); document.getElementById('simDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 rounded-md hover:bg-rose-500/20 text-slate-200 transition-colors">
+              <div class="font-bold text-rose-300">2. SQL Injection Attack (RULE-003)</div>
+              <div class="text-[11px] text-slate-400">UNION SELECT & auth bypass payloads</div>
+            </button>
+            <button onclick="triggerSimulation('directory-traversal'); document.getElementById('simDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 rounded-md hover:bg-amber-500/20 text-slate-200 transition-colors">
+              <div class="font-bold text-amber-300">3. Directory Traversal (RULE-002)</div>
+              <div class="text-[11px] text-slate-400">Path traversal for /etc/passwd & win.ini</div>
+            </button>
+            <button onclick="triggerSimulation('endpoint-fuzzing'); document.getElementById('simDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 rounded-md hover:bg-amber-500/20 text-slate-200 transition-colors">
+              <div class="font-bold text-amber-300">4. 404 Endpoint Fuzzing (RULE-002)</div>
+              <div class="text-[11px] text-slate-400">14 rapid 404 discovery probes</div>
+            </button>
+            <button onclick="triggerSimulation('ddos-burst'); document.getElementById('simDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 rounded-md hover:bg-cyan-500/20 text-slate-200 transition-colors">
+              <div class="font-bold text-cyan-300">5. Traffic Burst / DoS (RULE-004)</div>
+              <div class="text-[11px] text-slate-400">55 rapid requests in 2 seconds</div>
+            </button>
+            <button onclick="triggerSimulation('multi-vector'); document.getElementById('simDropdown').classList.add('hidden')" class="w-full text-left px-3 py-2 rounded-md hover:bg-purple-500/20 text-slate-200 transition-colors border-t border-white/5 mt-1">
+              <div class="font-bold text-purple-300">💥 Multi-Vector APT Assault</div>
+              <div class="text-[11px] text-slate-400">All attack vectors combined sequence</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Reset Button -->
+        <button onclick="resetDashboard()" class="p-2 bg-slate-800/80 hover:bg-rose-950/50 hover:text-rose-400 text-slate-400 rounded-lg border border-white/10 transition-colors" title="Reset Dashboard State">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        </button>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN SOC WORKSPACE CONTAINER -->
+  <main class="flex-1 max-w-[1700px] w-full mx-auto px-6 py-6 space-y-6">
+
+    <!-- TOP METRICS CARDS ROW -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      
+      <!-- Total Ingested Events -->
+      <div class="soc-card p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+          <span>TOTAL EVENTS INGESTED</span>
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        </div>
+        <div class="mt-2 flex items-baseline justify-between">
+          <div id="totalEventsCount" class="text-2xl font-bold font-mono text-white">0</div>
+          <span id="epsValue" class="text-xs font-mono font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">0 EPS</span>
+        </div>
+      </div>
+
+      <!-- High Severity Alerts -->
+      <div id="highAlertsBox" class="soc-card p-4 flex flex-col justify-between border-rose-500/20">
+        <div class="flex items-center justify-between text-rose-400 text-xs font-semibold">
+          <span>ACTIVE HIGH ALERTS</span>
+          <span class="flex h-2 w-2 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+          </span>
+        </div>
+        <div class="mt-2 flex items-baseline justify-between">
+          <div id="highAlertsCount" class="text-2xl font-bold font-mono text-rose-400">0</div>
+          <span class="text-[10px] font-mono text-rose-300 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">CRITICAL / HIGH</span>
+        </div>
+      </div>
+
+      <!-- Medium Severity Alerts -->
+      <div class="soc-card p-4 flex flex-col justify-between border-amber-500/20">
+        <div class="flex items-center justify-between text-amber-400 text-xs font-semibold">
+          <span>MEDIUM ALERTS</span>
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        <div class="mt-2 flex items-baseline justify-between">
+          <div id="mediumAlertsCount" class="text-2xl font-bold font-mono text-amber-400">0</div>
+          <span class="text-[10px] font-mono text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">RECON / FUZZ</span>
+        </div>
+      </div>
+
+      <!-- Low / Info Alerts -->
+      <div class="soc-card p-4 flex flex-col justify-between border-cyan-500/20">
+        <div class="flex items-center justify-between text-cyan-400 text-xs font-semibold">
+          <span>LOW / INFO ALERTS</span>
+          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div class="mt-2 flex items-baseline justify-between">
+          <div id="lowAlertsCount" class="text-2xl font-bold font-mono text-cyan-400">0</div>
+          <span class="text-[10px] font-mono text-cyan-300 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">BURST / VOLUMETRIC</span>
+        </div>
+      </div>
+
+      <!-- File Ingest Dropzone Card -->
+      <div id="logDropzone" class="soc-card p-4 border-dashed border-2 border-slate-700 hover:border-indigo-500 flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-900/40 relative">
+        <input type="file" id="logFileInput" accept=".log,.txt" class="hidden">
+        <svg class="w-5 h-5 text-indigo-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+        <div class="text-xs font-semibold text-slate-200">Drop .log or .txt file</div>
+        <div class="text-[10px] text-slate-400">or click to browse</div>
+      </div>
+
+    </div>
+
+    <!-- CHARTS & TELEMETRY ROW (3 PANELS) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      
+      <!-- Live Event Velocity Chart (6 Cols) -->
+      <div class="soc-card p-4 lg:col-span-6 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-200">Live Ingestion Velocity (Throughput)</h2>
+            <p class="text-[11px] text-slate-400 font-mono">Real-time Sliding Window (EPS)</p>
+          </div>
+          <span class="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">1s Granularity</span>
+        </div>
+        <div class="h-48 w-full relative">
+          <canvas id="velocityChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Threat Severity Breakdown (3 Cols) -->
+      <div class="soc-card p-4 lg:col-span-3 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-200">Alerts by Severity</h2>
+            <p class="text-[11px] text-slate-400 font-mono">Threat Classification</p>
+          </div>
+        </div>
+        <div class="h-48 w-full relative flex items-center justify-center">
+          <canvas id="severityChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Top Attacker Origins (3 Cols) -->
+      <div class="soc-card p-4 lg:col-span-3 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-200">Top Threat Origins</h2>
+            <p class="text-[11px] text-slate-400 font-mono">Ranked Attacker IPs</p>
+          </div>
+        </div>
+        <div class="h-48 w-full relative">
+          <canvas id="attackersChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- LIVE INGESTION STREAM & ALERTS TRIAGE SPLIT PANEL -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+      
+      <!-- LEFT: Live Ingestion Monospaced Terminal (6 Cols) -->
+      <div class="soc-card p-4 xl:col-span-6 flex flex-col h-[520px]">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-white/5">
+          <div class="flex items-center space-x-2">
+            <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+            <h2 class="text-sm font-bold text-slate-200">Live Ingestion Feed</h2>
+            <span id="logStreamCount" class="text-[11px] font-mono text-slate-400">0 events buffered</span>
+          </div>
+          
+          <div class="flex items-center space-x-2">
+            <select id="logTypeSelect" class="bg-slate-900 border border-white/10 text-slate-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-indigo-500">
+              <option value="ALL">All Log Types</option>
+              <option value="ACCESS">Web Access (HTTP)</option>
+              <option value="AUTH">Auth / Syslog (SSH)</option>
+              <option value="MALFORMED">Unstructured / Raw</option>
+            </select>
+
+            <button id="toggleAutoScroll" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-mono">
+              ⏸ Pause Scroll
+            </button>
+
+            <button id="clearFeedBtn" class="px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-slate-200 text-xs" title="Clear buffer">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Terminal Search Filter -->
+        <div class="mb-2">
+          <input type="text" id="logSearchInput" placeholder="Filter logs by IP, method, user, or keyword..." class="w-full bg-slate-900/90 border border-white/10 rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <!-- Terminal Output View -->
+        <div id="terminalFeed" class="terminal-window rounded-lg flex-1 overflow-y-auto p-2.5 space-y-1">
+          <div class="text-slate-500 text-center py-12 text-xs font-mono">
+            Waiting for log stream... Load sample fixtures or trigger attack simulation to watch real-time parsing.
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: SIEM Alerts & Correlation Triage Table (6 Cols) -->
+      <div class="soc-card p-4 xl:col-span-6 flex flex-col h-[520px]">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-white/5">
+          <div class="flex items-center space-x-2">
+            <span class="h-2 w-2 rounded-full bg-rose-500"></span>
+            <h2 class="text-sm font-bold text-slate-200">SIEM Correlated Alerts</h2>
+            <span class="text-[11px] font-mono text-slate-400">Sliding Window Triggers</span>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <select id="alertSeverityFilter" class="bg-slate-900 border border-white/10 text-slate-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-rose-500">
+              <option value="ALL">All Severities</option>
+              <option value="HIGH">High / Critical</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low / Info</option>
+            </select>
+
+            <button onclick="exportAlertsJson()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs flex items-center space-x-1" title="Export Alerts">
+              <span>📥 Export JSON</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Alerts Table Container -->
+        <div class="flex-1 overflow-y-auto rounded-lg border border-white/5 bg-slate-950/40">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-900/90 text-[11px] font-mono text-slate-400 uppercase sticky top-0 border-b border-white/10 z-10">
+              <tr>
+                <th class="px-4 py-2.5">Severity</th>
+                <th class="px-4 py-2.5">Rule ID / Name</th>
+                <th class="px-4 py-2.5">Attacker IP</th>
+                <th class="px-4 py-2.5">Time</th>
+                <th class="px-4 py-2.5">Evidence Snippet</th>
+                <th class="px-4 py-2.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="alertsTableBody" class="divide-y divide-white/5">
+              <tr>
+                <td colspan="6" class="px-4 py-12 text-center text-slate-500 font-mono text-xs">
+                  No security alerts triggered yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="mt-auto border-t border-white/5 bg-[#090d15] px-6 py-4 text-center text-xs text-slate-500 font-mono">
+    <span>SentinelLog SIEM Engine &bull; Built with Node.js, Native WebSockets, and Express &bull; Sliding Window Correlation Rules (RULE-001 - RULE-004)</span>
+  </footer>
+
+  <!-- ALERT TRIAGE & REMEDIATION MODAL -->
+  <div id="triageModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="soc-card max-w-2xl w-full p-6 shadow-2xl border border-white/10 max-h-[90vh] flex flex-col">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-4 border-b border-white/10">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span id="triageSeverity" class="px-2 py-0.5 rounded text-xs font-bold uppercase">HIGH</span>
+            <span id="triageAlertId" class="text-xs font-mono text-slate-400">ALT-123456</span>
+          </div>
+          <h3 id="triageRuleName" class="text-lg font-bold text-white mt-1">SSH Brute Force Attack</h3>
+          <p id="triageMitre" class="text-xs font-mono text-indigo-400 mt-0.5">T1110.001 - Password Guessing</p>
+        </div>
+        <button onclick="closeTriageModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="flex-1 overflow-y-auto py-4 space-y-4 text-xs">
+        
+        <!-- Metadata Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-900/60 p-3 rounded-lg border border-white/5 font-mono">
+          <div>
+            <span class="text-slate-500 block text-[10px]">RULE ID</span>
+            <span id="triageRuleId" class="font-bold text-slate-200">RULE-001</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block text-[10px]">ATTACKER IP</span>
+            <span id="triageAttackerIp" class="font-bold text-sky-400">198.51.100.42</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block text-[10px]">TARGET RESOURCE</span>
+            <span id="triageTarget" class="font-bold text-slate-200">SSH Daemon (root)</span>
+          </div>
+          <div class="col-span-2 sm:col-span-3">
+            <span class="text-slate-500 block text-[10px]">FIRST TRIGGERED AT</span>
+            <span id="triageTimestamp" class="text-slate-300">2026-09-30 14:20:10 UTC</span>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <h4 class="font-semibold text-slate-300 mb-1">Incident Summary</h4>
+          <p id="triageDescription" class="text-slate-400 leading-relaxed"></p>
+        </div>
+
+        <!-- Evidence Raw Log Lines -->
+        <div>
+          <h4 class="font-semibold text-slate-300 mb-1 flex items-center justify-between">
+            <span>Correlation Evidence (Triggering Logs)</span>
+            <span class="text-[10px] text-slate-500 font-mono">Sliding Window Events</span>
+          </h4>
+          <div id="triageEvidence" class="terminal-window rounded p-2.5 max-h-40 overflow-y-auto space-y-1">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Suggested Mitigation & Copy Command -->
+        <div class="bg-rose-950/20 border border-rose-500/30 p-3.5 rounded-lg">
+          <h4 class="font-bold text-rose-300 mb-1.5 flex items-center space-x-1.5">
+            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <span>Automated Remediation / Mitigation Action</span>
+          </h4>
+          <p id="triageMitigationText" class="text-slate-300 font-mono text-xs whitespace-pre-wrap mb-2.5"></p>
+          <button onclick="copyMitigationCommand()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-bold font-mono transition-colors flex items-center space-x-1.5 shadow-md shadow-rose-950">
+            <span>📋 Copy Firewall Drop Command</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-3 border-t border-white/10 flex justify-end space-x-2">
+        <button onclick="closeTriageModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium">
+          Close Triage
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PASTE RAW LOGS MODAL -->
+  <div id="pasteLogsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="soc-card max-w-xl w-full p-6 shadow-2xl border border-white/10 flex flex-col">
+      <h3 class="text-base font-bold text-white mb-2">Ingest Raw Log Text</h3>
+      <p class="text-xs text-slate-400 mb-3">Paste Apache/Nginx combined access logs or Linux auth.log / syslog lines below:</p>
+      
+      <textarea id="pasteLogsTextarea" rows="8" placeholder='192.168.1.50 - - [30/Sep/2026:14:20:10 +0000] "GET /api/v1/users?id=1 HTTP/1.1" 200 4520 "-" "Mozilla/5.0"&#10;Sep 30 14:20:10 srv01 sshd[123]: Failed password for root from 198.51.100.42 port 52000 ssh2' class="w-full bg-slate-900 border border-white/10 rounded-lg p-3 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500"></textarea>
+
+      <div class="mt-4 flex justify-end space-x-2">
+        <button id="cancelPasteBtn" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium">
+          Cancel
+        </button>
+        <button id="submitPasteBtn" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-900/30">
+          Ingest & Process Batch
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 max-w-md pointer-events-none"></div>
+
+  <!-- BEEP AUDIO (High alert trigger) -->
+  <audio id="alertAudio" preload="auto">
+    <source src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(200).join("AP8A/w==") type="audio/wav">
+  </audio>
+
+  <!-- DASHBOARD JAVASCRIPT -->
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

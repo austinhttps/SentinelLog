@@ -1,0 +1,26 @@
+10.0.0.15 - - [30/Sep/2026:14:00:10 +0000] "GET /index.html HTTP/1.1" 200 4520 "https://sentinel.local/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+10.0.0.15 - - [30/Sep/2026:14:00:11 +0000] "GET /css/app.css HTTP/1.1" 200 12500 "https://sentinel.local/index.html" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+10.0.0.15 - - [30/Sep/2026:14:00:12 +0000] "GET /js/main.js HTTP/1.1" 200 34100 "https://sentinel.local/index.html" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+10.0.0.15 - - [30/Sep/2026:14:00:15 +0000] "GET /api/v1/user/profile HTTP/1.1" 200 890 "https://sentinel.local/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+
+# Directory Traversal
+185.220.101.5 - - [30/Sep/2026:14:05:01 +0000] "GET /static/../../../../etc/passwd HTTP/1.1" 403 512 "-" "DirBuster-1.0-RC1"
+185.220.101.5 - - [30/Sep/2026:14:05:02 +0000] "GET /download?file=../../../../windows/win.ini HTTP/1.1" 403 512 "-" "DirBuster-1.0-RC1"
+
+# SQL Injection
+203.0.113.88 - - [30/Sep/2026:14:06:10 +0000] "GET /api/v1/users?id=1%27%20OR%20%271%27=%271 HTTP/1.1" 200 3420 "-" "Sqlmap/1.6.12#stable"
+203.0.113.88 - - [30/Sep/2026:14:06:11 +0000] "GET /products/search?query=test%27%20UNION%20SELECT%20null,username,password%20FROM%20users-- HTTP/1.1" 200 4890 "-" "Sqlmap/1.6.12#stable"
+
+# 404 Endpoint Fuzzing Sequence
+194.26.29.112 - - [30/Sep/2026:14:07:01 +0000] "GET /admin.php HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:02 +0000] "GET /wp-login.php HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:02 +0000] "GET /.env HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:03 +0000] "GET /.git/config HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:03 +0000] "GET /phpmyadmin/ HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:04 +0000] "GET /config.json HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:04 +0000] "GET /backup.zip HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:05 +0000] "GET /api/v2/secret HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:05 +0000] "GET /actuator/health HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:06 +0000] "GET /database.sql HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:06 +0000] "GET /server-status HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
+194.26.29.112 - - [30/Sep/2026:14:07:07 +0000] "GET /console/ HTTP/1.1" 404 280 "-" "ffuf/v2.0.0"
