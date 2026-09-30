@@ -10,34 +10,41 @@ It provides real-time streaming ingestion for web access logs and authentication
 
 ```mermaid
 flowchart TD
-    A[Raw Log Source\n(access.log, auth.log, multipart upload, REST API)] --> B[Resilient Log Parser Engine]
+    A["Raw Log Source<br/>(access.log, auth.log, multipart upload, REST API)"] --> B["Resilient Log Parser Engine"]
     
-    subgraph Ingestion & Normalization
-        B -->|Regex Matching| C1[Apache/Nginx Access Parser]
-        B -->|Syslog Extraction| C2[Linux Auth.log / SSH Parser]
-        B -->|Safe Fallback| C3[Unstructured Event Handler]
+    subgraph Ingestion_Normalization["Ingestion & Normalization"]
+        B -->|Regex Matching| C1["Apache/Nginx Access Parser"]
+        B -->|Syslog Extraction| C2["Linux Auth.log / SSH Parser"]
+        B -->|Safe Fallback| C3["Unstructured Event Handler"]
     end
 
-    C1 & C2 & C3 --> D[Normalized Security Event]
+    C1 --> D["Normalized Security Event"]
+    C2 --> D
+    C3 --> D
 
-    subgraph SIEM Detection Engine
-        D --> E[In-Memory Sliding Window Tracker]
-        E --> F1["RULE-001: SSH Brute Force (>=5 failed / 60s)"]
-        E --> F2["RULE-002: Directory Traversal / Fuzzing (>10 404s / 30s)"]
+    subgraph SIEM_Detection["SIEM Detection Engine"]
+        D --> E["In-Memory Sliding Window Tracker"]
+        E --> F1["RULE-001: SSH Brute Force (>= 5 failed / 60s)"]
+        E --> F2["RULE-002: Directory Traversal / Fuzzing (> 10 404s / 30s)"]
         E --> F3["RULE-003: SQL Injection Signature (Regex Heuristics)"]
-        E --> F4["RULE-004: Volumetric Request Burst (>50 reqs / 10s)"]
+        E --> F4["RULE-004: Volumetric Request Burst (> 50 reqs / 10s)"]
     end
 
-    F1 & F2 & F3 & F4 -->|Correlated Threat Match| G[Alert Dispatcher]
-    D --> H[Metrics & Telemetry Service]
+    F1 --> G["Alert Dispatcher"]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+    D --> H["Metrics & Telemetry Service"]
 
-    subgraph Real-Time Streaming & Client UI
-        G & H & D --> I[WebSocket Broadcast Server]
-        I -->|ws:// /ws| J[SOC Analyst Dashboard]
-        J --> K1[Top KPI Counters & Status]
-        J --> K2[Live Throughput & Velocity Chart]
-        J --> K3[Terminal Stream Viewer]
-        J --> K4[Correlated Alert Table & Triage Modal]
+    subgraph RealTime_UI["Real-Time Streaming & Client UI"]
+        G --> I["WebSocket Broadcast Server"]
+        H --> I
+        D --> I
+        I --> J["SOC Analyst Dashboard"]
+        J --> K1["Top KPI Counters & Status"]
+        J --> K2["Live Throughput & Velocity Chart"]
+        J --> K3["Terminal Stream Viewer"]
+        J --> K4["Correlated Alert Table & Triage Modal"]
     end
 ```
 
